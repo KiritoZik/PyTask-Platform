@@ -1,5 +1,12 @@
+from datetime import datetime
+
 import pytest
 from src.models import Task, TaskStatus
+from src.task_exceptions import (
+    InvalidPriorityError,
+    InvalidStatusError,
+    TaskValidationError,
+)
 
 
 def test_task_creation():
@@ -33,5 +40,30 @@ def test_create_task_with_classmethod():
 
 def test_create_task_classmethod_missing_keys():
     task_data = {"task_id": 202, "info": "Неполная задача"}
-    with pytest.raises(ValueError, match="Ошибка при инициализации задачи"):
+    with pytest.raises(TaskValidationError, match="Нужны ключи"):
         Task.create_task(task_data)
+
+
+def test_descriptor_rejects_invalid_priority():
+    task = Task(task_id=1, info="x", priority=2, status=TaskStatus.NEW)
+    with pytest.raises(InvalidPriorityError):
+        task.priority = 10
+
+
+def test_readonly_created_date_descriptor():
+    task = Task(task_id=1, info="x", priority=2, status=TaskStatus.NEW)
+    assert isinstance(task.created_date, datetime)
+    with pytest.raises(AttributeError):
+        task.created_date = task.created_date
+
+
+def test_create_task_invalid_status_string():
+    with pytest.raises(InvalidStatusError):
+        Task.create_task(
+            {
+                "task_id": 1,
+                "info": "a",
+                "priority": 2,
+                "status": "UNKNOWN_STATUS_XYZ",
+            }
+        )

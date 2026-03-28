@@ -45,6 +45,6 @@ def test_file_source_invalid_lines(tmp_path):
 def test_parse_payload_static_method():
     payload_str = "task_id=10;priority=4;status=IN_PROGRESS"
     payload = FileSource.parse_payload(payload_str)
-    assert payload["task_id"] == 10
-    assert payload["priority"] == 4
+    assert payload["task_id"] == "10"
+    assert payload["priority"] == "4"
     assert payload["status"] == "IN_PROGRESS"

@@ -1,6 +1,15 @@
 from datetime import datetime
-from typing import Literal
 from enum import Enum
+from typing import Literal, cast
+
+from src.descriptors import (
+    ReadOnlyCreatedAt,
+    ValidatedDescription,
+    ValidatedEnum,
+    ValidatedPositiveId,
+    ValidatedPriority,
+)
+from src.task_exceptions import TaskValidationError
 
 
 class TaskStatus(Enum):
@@ -13,13 +22,27 @@ class TaskStatus(Enum):
 
 class Task:
     """
-    Класс для представления задачи.
+    Задача платформы обработки: инкапсулированное состояние и валидация через дескрипторы.
 
-    :param task_id: Уникальный идентификатор задачи.
-    :param info: Описание задачи.
-    :param priority: Приоритет задачи (от 1 до 5).
-    :param status: Текущий статус задачи.
+    :param task_id: id > 0
+    :param info: непустая строка
+    :param priority: 1..5
+    :param status: TaskStatus
     """
+
+    __slots__ = (
+        "_task_id",
+        "_info",
+        "_priority",
+        "_status",
+        "_created_at",
+    )
+
+    task_id = ValidatedPositiveId("_task_id")
+    info = ValidatedDescription("_info")
+    priority = ValidatedPriority("_priority")
+    status = ValidatedEnum("_status", TaskStatus)
+    created_date = ReadOnlyCreatedAt("_created_at")
 
     def __init__(
         self,
@@ -27,12 +50,12 @@ class Task:
         info: str,
         priority: Literal[1, 2, 3, 4, 5],
         status: TaskStatus,
-    ):
+    ) -> None:
+        object.__setattr__(self, "_created_at", datetime.now())
         self.task_id = task_id
         self.info = info
         self.priority = priority
         self.status = status
-        self.created_date = datetime.now()
 
     @property
     def is_ready_to_start(self) -> bool:
@@ -43,18 +66,23 @@ class Task:
         return self.status == TaskStatus.NEW
 
     @classmethod
-    def create_task(cls, data: dict):
+    def create_task(cls, data: dict) -> "Task":
         """
-        Фабричный метод для создания задачи из словаря.
-        :param data: Словарь с данными для создания задачи.
-        :return: Экземпляр класса Task.
-        :raises ValueError: Если в словаре отсутствуют обязательные ключи.
-        """
-        required = ["task_id", "info", "priority"]
-        if not all(key in data for key in required):
-            raise ValueError(
-                "Ошибка при инициализации задачи: отсутствуют обязательные поля."
-            )
-        data["status"] = TaskStatus(data["status"].upper())
+        Фабричный метод: создаёт ``Task`` из словаря.
 
-        return cls(**data)
+        Нужны ключи task_id, info, priority, status. Исходный ``data`` не меняется.
+        """
+        d = dict(data)
+        need = ("task_id", "info", "priority", "status")
+        if not all(k in d for k in need):
+            raise TaskValidationError("Нужны ключи: task_id, info, priority, status.")
+        try:
+            tid, pr = int(d["task_id"]), int(d["priority"])
+        except (TypeError, ValueError):
+            raise TaskValidationError("task_id и priority должны быть числами.")
+        return cls(
+            task_id=tid,
+            info=str(d["info"]),
+            priority=cast(Literal[1, 2, 3, 4, 5], pr),
+            status=d["status"],
+        )
